@@ -1,0 +1,127 @@
+name: Build & Release Databases
+
+on:
+  # Manual trigger from the Actions tab
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. db-2026-04). Leave blank to use current year-month.'
+        required: false
+        default: ''
+      skip_off:
+        description: 'Skip Open Food Facts (builds only USDA databases, ~10× faster)'
+        type: boolean
+        required: false
+        default: false
+
+  # Optional: run automatically on the 1st of every month at 02:00 UTC
+  # Uncomment when you want fully automated monthly releases:
+  # schedule:
+  #   - cron: '0 2 1 * *'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # OFF download + build can take ~2 hours on free runners
+
+    permissions:
+      contents: write  # needed to create releases
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── System dependencies ──────────────────────────────────────────────
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zstd python3 curl
+          python3 --version
+          zstd --version
+
+      # ── Determine tag ────────────────────────────────────────────────────
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=db-$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      # ── Download source data ─────────────────────────────────────────────
+      - name: Download USDA source data
+        run: |
+          mkdir -p /tmp/usda_raw
+          echo "Downloading USDA FoodData Central..."
+          curl -L --progress-bar \
+            -o /tmp/usda_raw/FoodData_Central_csv.zip \
+            "https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_csv_2024-04-18.zip"
+
+      - name: Download Open Food Facts
+        if: ${{ github.event.inputs.skip_off != 'true' }}
+        run: |
+          echo "Downloading Open Food Facts CSV (~1.2 GB)..."
+          curl -L --progress-bar \
+            -o /tmp/usda_raw/off_products.csv.gz \
+            "https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz"
+
+      # ── Build databases ───────────────────────────────────────────────────
+      - name: Build databases
+        run: |
+          if [ "${{ github.event.inputs.skip_off }}" = "true" ]; then
+            python3 scripts/build_food_db.py --skip-global
+          else
+            python3 scripts/build_food_db.py
+          fi
+        env:
+          PYTHONUNBUFFERED: "1"
+
+      # ── Checksums ─────────────────────────────────────────────────────────
+      - name: Generate checksums
+        run: |
+          cd assets
+          sha256sum *.gz > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # ── List artifact sizes ───────────────────────────────────────────────
+      - name: Show artifact sizes
+        run: ls -lh assets/
+
+      # ── Create GitHub Release ─────────────────────────────────────────────
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          MONTH="${TAG#db-}"
+
+          gh release create "$TAG" \
+            assets/foods_generic.db.gz \
+            $( [ -f assets/foods_branded.db.gz ] && echo assets/foods_branded.db.gz ) \
+            $( [ -f assets/foods_global.db.gz ]  && echo assets/foods_global.db.gz  ) \
+            assets/SHA256SUMS.txt \
+            --repo "${{ github.repository }}" \
+            --title "Databases $MONTH" \
+            --notes "$(cat <<'EOF'
+          ## Microcore database release $MONTH
+
+          ### Databases included
+
+          | File | Contents | License |
+          |---|---|---|
+          | \`foods_generic.db.gz\` | ~13 k USDA generic foods | Public Domain |
+          | \`foods_branded.db.gz\` | ~2 M USDA branded products | Public Domain |
+          | \`foods_global.db.gz\` | ~2 M Open Food Facts | ODbL v1.0 |
+
+          ### Open Food Facts attribution
+
+          \`foods_global.db.gz\` is derived from [Open Food Facts](https://world.openfoodfacts.org/)
+          and is released under the [Open Database License (ODbL) v1.0](https://opendatacommons.org/licenses/odbl/1-0/).
+
+          ### Checksums
+          See \`SHA256SUMS.txt\` attached to this release.
+          EOF
+          )"

@@ -1,0 +1,30 @@
+# Built databases — large files, distributed via GitHub Releases only
+assets/*.db
+assets/*.db.gz
+assets/*.db.zst
+assets/SHA256SUMS.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+*.egg
+
+# Raw source data lives in /tmp/usda_raw — never committed
+# (listed here in case someone accidentally copies it here)
+raw/
+*.csv
+*.zip
+*.csv.gz
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/settings.json
+*.swp
