@@ -16,7 +16,7 @@ set -euo pipefail
 
 MONTH="${1:-$(date +%Y-%m)}"
 TAG="db-$MONTH"
-REPO="mc-health/microcore-assets"
+REPO="microcore-app/microcore-assets"
 ASSETS_DIR="$(cd "$(dirname "$0")/.." && pwd)/assets"
 
 echo "╔══════════════════════════════════════════════╗"

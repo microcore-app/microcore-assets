@@ -1,7 +1,7 @@
 # microcore-assets
 
 Build scripts, data pipelines, and pre-built database releases for the
-[Microcore](https://github.com/mc-health/microcore) health tracking app.
+[Microcore](https://github.com/microcore-app/microcore) health tracking app.
 
 ## Repository layout
 
@@ -25,7 +25,7 @@ DATA_LICENSES.md        # Full license analysis for redistributed data
 | `foods_branded.db.gz` | ~2 M | ~100 MB | USDA Branded Food Products |
 | `foods_global.db.gz` | ~2 M | ~97 MB | Open Food Facts (multilingual) |
 
-Latest release: [Releases →](https://github.com/mc-health/microcore-assets/releases)
+Latest release: [Releases →](https://github.com/microcore-app/microcore-assets/releases)
 
 ## Building locally
 
