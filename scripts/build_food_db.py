@@ -2,16 +2,18 @@
 """
 tool/build_food_db.py
 =====================
-Builds three offline food SQLite databases, compresses them.
+Builds four offline food SQLite databases, compresses them.
 
-  foods_generic.db.zst   ~0.6 MB   →  ships INSIDE the app bundle
-  foods_branded.db.zst   ~80 MB    →  downloaded on first launch (CDN)
-  foods_global.db.zst    ~20 MB    →  downloaded on first launch (CDN)
+  foods_generic.db.gz    ~0.6 MB   →  ships INSIDE the app bundle
+  foods_branded.db.gz    ~80 MB    →  downloaded on first launch (CDN)
+  foods_global.db.gz     ~20 MB    →  downloaded on first launch (CDN)
+  foods_swedish.db.gz    ~1 MB     →  downloaded on first launch (CDN)
 
 Sources (all public domain / open licence):
   1. USDA SR Legacy + Foundation + FNDDS  → generic
   2. USDA Branded (~2M products, barcodes) → branded
   3. Open Food Facts (global crowd-sourced, multilingual) → global
+  4. Livsmedelsverket API (~2 500 Swedish foods, CC BY 4.0) → swedish
 
 Nutrients stored as a 56-byte BLOB (28 × uint16 fixed-point).
   - Saves ~40% vs 28 REAL columns for sparse nutrient data.
@@ -587,7 +589,7 @@ def build_global(skip_download=False):
         'carbohydrates_100g','fiber_100g','sugars_100g','sodium_100g',
         'saturated-fat_100g',
     ]
-    MIN_NUTRIENTS = 3
+    MIN_NUTRIENTS = 5
 
     print("  Streaming OFF CSV (may take several minutes)...")
     BATCH  = 20_000
@@ -693,6 +695,144 @@ def build_global(skip_download=False):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 4. SWEDISH (Swedish Food Agency / Livsmedelsverket)
+# ══════════════════════════════════════════════════════════════════════════════
+def build_swedish():
+    """Fetch ~2 500 foods from the SLV open API and build foods_swedish.db."""
+    import json
+    print("\n" + "="*60)
+    print("SWEDISH  (Livsmedelsverket — ~2 500 foods)")
+    print("="*60)
+    t0 = time.time()
+
+    BASE = 'https://dataportal.livsmedelsverket.se/livsmedel'
+
+    def api_get(path: str) -> object:
+        url = BASE + path
+        req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+
+    # EuroFIR code → USDA nutrient id string (for encode_blob compatibility).
+    # All SLV values are per 100 g, units already match our NUTRIENTS schema.
+    # Special case: ENERC appears twice (kcal and kJ) — disambiguated by enhet.
+    EUROFIR_MAP = {
+        'PROT':   '1003',  # g protein
+        'FAT':    '1004',  # g fat
+        'CHO':    '1005',  # g available carbs
+        'FIBT':   '1079',  # g fiber
+        'SUGAR':  '2000',  # g total sugars
+        'NA':     '1093',  # mg sodium
+        'FASAT':  '1258',  # g sat fat
+        'FATRN':  '1257',  # g trans fat
+        'CHORL':  '1253',  # mg cholesterol
+        'FAMS':   '1292',  # g mono fat
+        'FAPU':   '1293',  # g poly fat
+        'VITA':   '1106',  # µg RAE vit A
+        'VITC':   '1162',  # mg vit C
+        'VITD':   '1114',  # µg vit D
+        'VITE':   '1109',  # mg vit E
+        'VITB6':  '1175',  # mg vit B6
+        'VITB12': '1178',  # µg vit B12
+        'FOL':    '1190',  # µg folate
+        'NIA':    '1167',  # mg niacin
+        'CA':     '1087',  # mg calcium
+        'FE':     '1089',  # mg iron
+        'MG':     '1090',  # mg magnesium
+        'K':      '1092',  # mg potassium
+        'ZN':     '1095',  # mg zinc
+    }
+
+    con = new_db(ASSETS / 'foods_swedish.db')
+    con.executescript('''
+        CREATE TABLE category (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+        CREATE TABLE food (
+            id        INTEGER PRIMARY KEY,
+            name      TEXT NOT NULL,
+            cat_id    INTEGER REFERENCES category(id),
+            serving_g REAL,
+            source    TEXT,
+            nutrients BLOB
+        );
+        CREATE INDEX food_cat ON food(cat_id);
+    ''')
+
+    # Paginate through all foods
+    print("  Fetching food list...")
+    foods  = []
+    offset = 0
+    limit  = 200
+    while True:
+        page  = api_get(f'/api/v1/livsmedel?offset={offset}&limit={limit}')
+        batch = page.get('livsmedel', [])
+        foods.extend(batch)
+        total  = page['_meta']['totalRecords']
+        offset += len(batch)
+        print(f"    {offset}/{total}", end='\r', flush=True)
+        if offset >= total or not batch:
+            break
+        time.sleep(0.05)
+    print(f"\n  {len(foods):,} foods found")
+
+    # Fetch nutrients for every food
+    rows   = []
+    errors = 0
+    for i, food in enumerate(foods):
+        nummer = food['nummer']
+        name   = (food.get('namn') or '').strip()
+        typ    = food.get('livsmedelsTyp', '')
+        if not name:
+            continue
+        try:
+            raw_nuts = api_get(f'/api/v1/livsmedel/{nummer}/naringsvarden')
+            nd: dict = {}
+            for n in raw_nuts:
+                code = (n.get('euroFIRkod') or '').upper()
+                val  = n.get('varde')
+                if val is None:
+                    continue
+                if code == 'ENERC':
+                    nid = '1008' if 'kcal' in (n.get('enhet') or '').lower() else '1062'
+                elif code in EUROFIR_MAP:
+                    nid = EUROFIR_MAP[code]
+                else:
+                    continue
+                nd[nid] = float(val)
+        except Exception:
+            errors += 1
+            nd = {}
+        rows.append([int(nummer), name, None, None, typ, encode_blob(nd)])
+        if (i + 1) % 250 == 0 or (i + 1) == len(foods):
+            print(f"    {i+1}/{len(foods)} processed  ({errors} errors)...")
+        if i > 0 and i % 100 == 0:
+            time.sleep(0.1)  # polite batch delay
+
+    con.executemany(
+        'INSERT INTO food(id, name, cat_id, serving_g, source, nutrients) VALUES (?,?,?,?,?,?)',
+        rows,
+    )
+    con.commit()
+
+    con.execute('''
+        CREATE VIRTUAL TABLE food_fts USING fts5(
+            name, content=food, content_rowid=id,
+            tokenize="unicode61 remove_diacritics 2"
+        )
+    ''')
+    con.execute('INSERT INTO food_fts(food_fts) VALUES ("rebuild")')
+    con.commit()
+
+    n_in = len(rows)
+    finalize_db(con, 'slv_swedish', n_in)
+    sz = compress_db(ASSETS / 'foods_swedish.db')
+    print_sizes('foods_swedish.db', sz, n_in)
+    print(f"  Elapsed: {time.time()-t0:.1f}s")
+    if errors:
+        print(f"  WARNING: {errors} foods had fetch errors (stored with empty nutrients)")
+    return n_in
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Main
 # ══════════════════════════════════════════════════════════════════════════════
 def main():
@@ -700,8 +840,10 @@ def main():
     ap.add_argument('--skip-generic',  action='store_true')
     ap.add_argument('--skip-branded',  action='store_true')
     ap.add_argument('--skip-global',   action='store_true')
+    ap.add_argument('--skip-swedish',  action='store_true',
+                    help='Skip the Swedish Food Agency DB (requires internet API access)')
     ap.add_argument('--no-download',   action='store_true',
-                    help='Use cached zip/gz files only (skip wget)')
+                    help='Use cached zip/gz files only (skip wget; does not affect --swedish)')
     args = ap.parse_args()
 
     print(f"MicroCore Food DB Builder  {time.strftime('%Y-%m-%d %H:%M')}")
@@ -715,11 +857,13 @@ def main():
         build_branded(args.no_download)
     if not args.skip_global:
         build_global(args.no_download)
+    if not args.skip_swedish:
+        build_swedish()
 
     print("\n" + "="*60)
     print("DONE")
     print("="*60)
-    for fname in ('foods_generic.db','foods_branded.db','foods_global.db'):
+    for fname in ('foods_generic.db', 'foods_branded.db', 'foods_global.db', 'foods_swedish.db'):
         db = ASSETS / fname
         if not db.exists():
             continue

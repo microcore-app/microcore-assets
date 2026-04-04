@@ -69,6 +69,38 @@ Sources and licenses TBD when this database is added.
 
 ---
 
+## `foods_swedish.db.gz` — Livsmedelsverkets Livsmedelsdatabas
+
+**Source:** [Livsmedelsverket (Swedish Food Agency)](https://www.livsmedelsverket.se/om-oss/psidata/livsmedelsdatabasen/)  
+**API:** `https://dataportal.livsmedelsverket.se/livsmedel`  
+**License:** [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
+
+> Data is published under the licence Creative Commons Attribution 4.0.
+> This means you are permitted to use and distribute our open data and
+> create adaptations. Livsmedelsverket must be stated as the source.
+> — Livsmedelsverket
+
+### What CC BY 4.0 requires from redistributors:
+
+1. **Attribution** — You must give appropriate credit, provide a link to the
+   license, and indicate if changes were made. The required attribution is:
+   **"Livsmedelsverkets Livsmedelsdatabas"** (and the version/date of the data).
+
+2. **No Share-Alike** — Unlike ODbL, CC BY 4.0 does NOT require derivatives to
+   use the same license. You may incorporate the data into a proprietary product
+   as long as you include the attribution.
+
+### How this release complies:
+
+- Source data fetched live from the official SLV open API.
+- Build script: [`scripts/build_food_db.py`](scripts/build_food_db.py) (MIT licensed, see LICENSE)
+- Attribution notice: "Livsmedelsverkets Livsmedelsdatabas" is displayed in the
+  Microcore app's About screen and in each GitHub release description.
+
+✅ Legal to redistribute. Attribution included. No share-alike required.
+
+---
+
 ## Summary Table
 
 | File | Source | License | Redistribute? | Attribution required? |
@@ -76,3 +108,4 @@ Sources and licenses TBD when this database is added.
 | `foods_generic.db.gz` | USDA FDC | Public Domain | ✅ Yes | ❌ No |
 | `foods_branded.db.gz` | USDA FDC | Public Domain | ✅ Yes | ❌ No |
 | `foods_global.db.gz` | Open Food Facts | ODbL 1.0 | ✅ Yes | ✅ Yes |
+| `foods_swedish.db.gz` | Livsmedelsverket | CC BY 4.0 | ✅ Yes | ✅ Yes |

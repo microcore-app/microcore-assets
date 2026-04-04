@@ -13,6 +13,11 @@ on:
         type: boolean
         required: false
         default: false
+      skip_swedish:
+        description: 'Skip Swedish Food Agency DB (skips live API calls)'
+        type: boolean
+        required: false
+        default: false
 
   # Optional: run automatically on the 1st of every month at 02:00 UTC
   # Uncomment when you want fully automated monthly releases:
@@ -71,11 +76,10 @@ jobs:
       # ── Build databases ───────────────────────────────────────────────────
       - name: Build databases
         run: |
-          if [ "${{ github.event.inputs.skip_off }}" = "true" ]; then
-            python3 scripts/build_food_db.py --skip-global
-          else
-            python3 scripts/build_food_db.py
-          fi
+          ARGS=""
+          [ "${{ github.event.inputs.skip_off }}"     = "true" ] && ARGS="$ARGS --skip-global"
+          [ "${{ github.event.inputs.skip_swedish }}" = "true" ] && ARGS="$ARGS --skip-swedish"
+          python3 scripts/build_food_db.py $ARGS
         env:
           PYTHONUNBUFFERED: "1"
 
@@ -102,6 +106,7 @@ jobs:
             assets/foods_generic.db.gz \
             $( [ -f assets/foods_branded.db.gz ] && echo assets/foods_branded.db.gz ) \
             $( [ -f assets/foods_global.db.gz ]  && echo assets/foods_global.db.gz  ) \
+            $( [ -f assets/foods_swedish.db.gz ]  && echo assets/foods_swedish.db.gz  ) \
             assets/SHA256SUMS.txt \
             --repo "${{ github.repository }}" \
             --title "Databases $MONTH" \
@@ -115,12 +120,19 @@ jobs:
           | \`foods_generic.db.gz\` | ~13 k USDA generic foods | Public Domain |
           | \`foods_branded.db.gz\` | ~2 M USDA branded products | Public Domain |
           | \`foods_global.db.gz\` | ~2 M Open Food Facts | ODbL v1.0 |
+          | \`foods_swedish.db.gz\` | ~2 500 Swedish foods (Livsmedelsverket) | CC BY 4.0 |
 
           ### Open Food Facts attribution
 
           \`foods_global.db.gz\` is derived from [Open Food Facts](https://world.openfoodfacts.org/)
           and is released under the [Open Database License (ODbL) v1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 
+
+          ### Swedish Food Agency attribution
+
+          \`foods_swedish.db.gz\` contains data from [Livsmedelsverkets Livsmedelsdatabas](https://www.livsmedelsverket.se/om-oss/psidata/livsmedelsdatabasen/)
+          and is released under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+          Source: Livsmedelsverkets Livsmedelsdatabas.
           ### Checksums
           See \`SHA256SUMS.txt\` attached to this release.
           EOF
