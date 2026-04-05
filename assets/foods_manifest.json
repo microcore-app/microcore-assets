@@ -1,0 +1,37 @@
+{
+  "release": "db-2026-04",
+  "databases": [
+    {
+      "file": "foods_generic",
+      "name": "USDA Generic Foods",
+      "description": "~13 k scientifically analysed foods, always bundled in the app",
+      "bundled": true,
+      "license": "Public Domain",
+      "size_bytes": 728136
+    },
+    {
+      "file": "foods_branded",
+      "name": "USDA Branded Foods",
+      "description": "~2 M branded products with barcodes",
+      "bundled": false,
+      "license": "Public Domain",
+      "size_bytes": 148154160
+    },
+    {
+      "file": "foods_global",
+      "name": "Open Food Facts (multilingual)",
+      "description": "Community-maintained global database with product names in many languages",
+      "bundled": false,
+      "license": "ODbL 1.0",
+      "size_bytes": 122344198
+    },
+    {
+      "file": "foods_swedish",
+      "name": "Swedish Food Agency",
+      "description": "2 575 Swedish foods from Livsmedelsverket (SLV)",
+      "bundled": false,
+      "license": "CC BY 4.0",
+      "size_bytes": 175419
+    }
+  ]
+}

@@ -30,7 +30,7 @@ echo "Step 1/3 — Building databases..."
 python3 "$(dirname "$0")/build_food_db.py"
 
 # Check expected outputs exist
-for db in foods_generic.db.gz foods_branded.db.gz foods_global.db.gz foods_swedish.db.gz; do
+for db in foods_generic.db.gz foods_branded.db.gz foods_global.db.gz foods_swedish.db.gz foods_manifest.json; do
   if [ ! -f "$ASSETS_DIR/$db" ]; then
     echo "ERROR: expected output not found: $ASSETS_DIR/$db"
     exit 1
@@ -83,6 +83,7 @@ gh release create "$TAG" \
   "$ASSETS_DIR/foods_branded.db.gz" \
   "$ASSETS_DIR/foods_global.db.gz" \
   "$ASSETS_DIR/foods_swedish.db.gz" \
+  "$ASSETS_DIR/foods_manifest.json" \
   "$ASSETS_DIR/SHA256SUMS.txt" \
   --repo "$REPO" \
   --title "Databases $MONTH" \
