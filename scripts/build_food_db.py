@@ -193,13 +193,16 @@ def zip_find(z: zipfile.ZipFile, basename: str) -> str:
     return next(n for n in z.namelist() if n.split('/')[-1].lower() == basename.lower())
 
 
-def _load_nbr_remap(z: zipfile.ZipFile) -> dict:
-    """Build nutrient_nbr → nutrient_id remap from nutrient.csv in the zip.
+def _load_nutrient_remap(z: zipfile.ZipFile) -> dict:
+    """Build a universal remap from ANY nutrient identifier → canonical NUT_ID_MAP key.
 
-    The FNDDS (survey) zip stores old NDB numbers (e.g. 203 for protein)
-    in food_nutrient.csv's nutrient_id column instead of the 4-digit FDC
-    IDs (e.g. 1003).  nutrient.csv carries a ``nutrient_nbr`` column that
-    maps old numbers to the canonical 4-digit IDs we use in NUT_ID_MAP.
+    Reads nutrient.csv from the zip (if present) and indexes every column
+    that could appear as a nutrient_id in food_nutrient.csv:
+      - ``id``           (4-digit FDC ID, e.g. "1008")
+      - ``nutrient_nbr`` (old NDB number, e.g. "208")
+
+    The returned dict maps *any* of those values to the canonical NUT_ID_MAP
+    key so callers never need to know which numbering scheme a zip uses.
     """
     remap: dict[str, str] = {}
     try:
@@ -208,43 +211,69 @@ def _load_nbr_remap(z: zipfile.ZipFile) -> dict:
         return remap
     with z.open(nf) as f:
         for row in csv.DictReader(io.TextIOWrapper(f, encoding='utf-8')):
-            nbr = (row.get('nutrient_nbr') or '').strip()
-            nid = (row.get('id') or '').strip()
-            if nbr and nid and nbr != nid and nid in NUT_ID_MAP:
-                remap[nbr] = nid
+            canonical = (row.get('id') or '').strip()
+            if canonical not in NUT_ID_MAP:
+                continue
+            # Map every alternate identifier to the canonical ID
+            for col in ('nutrient_nbr',):
+                alt = (row.get(col) or '').strip()
+                if alt and alt != canonical:
+                    remap[alt] = canonical
     return remap
 
 
 def load_nutrients_from_zip(zpath: Path, food_ids: set) -> dict:
     """Stream food_nutrient.csv from a zip → {fdc_id: {nid_str: float}}.
 
-    Handles both 4-digit FDC nutrient IDs (SR Legacy, Foundation) and
-    old 3-digit NDB nutrient_nbr values (FNDDS/survey) by loading a
-    remapping table from nutrient.csv when present.
+    Handles any nutrient ID format (3-digit NDB numbers, 4-digit FDC IDs,
+    or future schemes) by loading a universal remap from nutrient.csv.
+
+    Raises ValueError if food_ids are present but zero matched nutrients,
+    which indicates a nutrient-ID format the remap doesn't cover.
     """
     result = {fid: {} for fid in food_ids}
+    if not food_ids:
+        return result
+
     with zipfile.ZipFile(zpath) as z:
         try:
             fn = zip_find(z, 'food_nutrient.csv')
         except StopIteration:
             return result
 
-        nbr_remap = _load_nbr_remap(z)
+        remap = _load_nutrient_remap(z)
 
+        matched_rows = 0
         with z.open(fn) as f:
             for row in csv.DictReader(io.TextIOWrapper(f, encoding='utf-8')):
                 fid = row.get('fdc_id', '')
                 if fid not in result:
                     continue
                 nid = row.get('nutrient_id', '')
+                # Canonical lookup first, then fall back to remap
                 if nid not in NUT_ID_MAP:
-                    nid = nbr_remap.get(nid, '')
+                    nid = remap.get(nid, '')
                 if nid not in NUT_ID_MAP:
                     continue
                 try:
                     result[fid][nid] = float(row['amount'])
+                    matched_rows += 1
                 except (ValueError, KeyError):
                     pass
+
+    # ── Safety check: fail loudly if no nutrients matched at all ──────────
+    foods_with_data = sum(1 for nd in result.values() if nd)
+    if food_ids and foods_with_data == 0:
+        raise ValueError(
+            f"FATAL: 0/{len(food_ids)} foods got any nutrient data from {zpath.name}. "
+            f"food_nutrient.csv likely uses an unrecognised nutrient-ID format. "
+            f"Remap had {len(remap)} entries; {matched_rows} rows matched."
+        )
+    if foods_with_data < len(food_ids) * 0.5:
+        print(f"  WARNING: only {foods_with_data}/{len(food_ids)} foods "
+              f"({100*foods_with_data/len(food_ids):.0f}%) got nutrient data "
+              f"from {zpath.name}")
+
     return result
 
 
