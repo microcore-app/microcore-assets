@@ -193,20 +193,52 @@ def zip_find(z: zipfile.ZipFile, basename: str) -> str:
     return next(n for n in z.namelist() if n.split('/')[-1].lower() == basename.lower())
 
 
+def _load_nbr_remap(z: zipfile.ZipFile) -> dict:
+    """Build nutrient_nbr → nutrient_id remap from nutrient.csv in the zip.
+
+    The FNDDS (survey) zip stores old NDB numbers (e.g. 203 for protein)
+    in food_nutrient.csv's nutrient_id column instead of the 4-digit FDC
+    IDs (e.g. 1003).  nutrient.csv carries a ``nutrient_nbr`` column that
+    maps old numbers to the canonical 4-digit IDs we use in NUT_ID_MAP.
+    """
+    remap: dict[str, str] = {}
+    try:
+        nf = zip_find(z, 'nutrient.csv')
+    except StopIteration:
+        return remap
+    with z.open(nf) as f:
+        for row in csv.DictReader(io.TextIOWrapper(f, encoding='utf-8')):
+            nbr = (row.get('nutrient_nbr') or '').strip()
+            nid = (row.get('id') or '').strip()
+            if nbr and nid and nbr != nid and nid in NUT_ID_MAP:
+                remap[nbr] = nid
+    return remap
+
+
 def load_nutrients_from_zip(zpath: Path, food_ids: set) -> dict:
-    """Stream food_nutrient.csv from a zip → {fdc_id: {nid_str: float}}."""
+    """Stream food_nutrient.csv from a zip → {fdc_id: {nid_str: float}}.
+
+    Handles both 4-digit FDC nutrient IDs (SR Legacy, Foundation) and
+    old 3-digit NDB nutrient_nbr values (FNDDS/survey) by loading a
+    remapping table from nutrient.csv when present.
+    """
     result = {fid: {} for fid in food_ids}
     with zipfile.ZipFile(zpath) as z:
         try:
             fn = zip_find(z, 'food_nutrient.csv')
         except StopIteration:
             return result
+
+        nbr_remap = _load_nbr_remap(z)
+
         with z.open(fn) as f:
             for row in csv.DictReader(io.TextIOWrapper(f, encoding='utf-8')):
                 fid = row.get('fdc_id', '')
                 if fid not in result:
                     continue
                 nid = row.get('nutrient_id', '')
+                if nid not in NUT_ID_MAP:
+                    nid = nbr_remap.get(nid, '')
                 if nid not in NUT_ID_MAP:
                     continue
                 try:
