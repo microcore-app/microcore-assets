@@ -7,7 +7,7 @@
       "description": "~13 k scientifically analysed foods, always bundled in the app",
       "bundled": true,
       "license": "Public Domain",
-      "size_bytes": 728136
+      "size_bytes": 875943
     },
     {
       "file": "foods_branded",
@@ -15,7 +15,7 @@
       "description": "~2 M branded products with barcodes",
       "bundled": false,
       "license": "Public Domain",
-      "size_bytes": 148154160
+      "size_bytes": 148154098
     },
     {
       "file": "foods_global",
@@ -23,7 +23,7 @@
       "description": "Community-maintained global database with product names in many languages",
       "bundled": false,
       "license": "ODbL 1.0",
-      "size_bytes": 122344198
+      "size_bytes": 121659976
     },
     {
       "file": "foods_swedish",
