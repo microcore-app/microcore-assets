@@ -103,7 +103,27 @@ assert BLOB_BYTES == N_NUT * 2, f"BLOB size mismatch: {BLOB_BYTES}"
 
 
 def encode_blob(nd: dict) -> bytes:
-    """Encode {nutrient_id_str: float} → 56-byte BLOB."""
+    """Encode {nutrient_id_str: float} → 56-byte BLOB.
+
+    If calories (1008) are missing but macros are present, estimate via
+    Atwater general factors: 4 kcal/g protein, 9 kcal/g fat, 4 kcal/g carbs.
+    Also back-fills cal_kj (1062) from kcal if missing.
+    """
+    # ── Atwater calorie estimation ────────────────────────────────────────
+    cal_key, kj_key = '1008', '1062'
+    pro_key, fat_key, carb_key = '1003', '1004', '1005'
+    if nd.get(cal_key) is None:
+        pro = nd.get(pro_key)
+        fat = nd.get(fat_key)
+        carb = nd.get(carb_key)
+        if any(v is not None for v in (pro, fat, carb)):
+            estimated = (pro or 0) * 4 + (fat or 0) * 9 + (carb or 0) * 4
+            if estimated > 0:
+                nd[cal_key] = estimated
+    # Back-fill kJ from kcal if missing.
+    if nd.get(kj_key) is None and nd.get(cal_key) is not None:
+        nd[kj_key] = nd[cal_key] * 4.184
+
     vals = []
     for col, nid, scale in NUTRIENTS:
         key = str(nid)
