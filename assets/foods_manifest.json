@@ -7,23 +7,26 @@
       "description": "~13 k scientifically analysed foods, always bundled in the app",
       "bundled": true,
       "license": "Public Domain",
-      "size_bytes": 875943
+      "size_bytes": 883873,
+      "sha256": "0819db349337d83742e7e255d4320c632aff5aa1d23c57bb74ac3c4962832eed"
     },
     {
       "file": "foods_branded",
       "name": "USDA Branded Foods",
-      "description": "~2 M branded products with barcodes",
+      "description": "~2 M branded products with barcodes (GTIN/UPC indexed)",
       "bundled": false,
       "license": "Public Domain",
-      "size_bytes": 148154098
+      "size_bytes": 149504026,
+      "sha256": "bde8b6ff19aaecfc0f312d24080237d5cb82c8175f79fd5c2bed315a7a280ff1"
     },
     {
       "file": "foods_global",
       "name": "Open Food Facts (multilingual)",
-      "description": "Community-maintained global database with product names in many languages",
+      "description": "Community-maintained global database with product names in many languages, barcode indexed",
       "bundled": false,
       "license": "ODbL 1.0",
-      "size_bytes": 121659976
+      "size_bytes": 126770317,
+      "sha256": "2bd5f6d2c928b232d4ace9dfe25e67739929699aaeb9c74898bf5127fdd6ff85"
     },
     {
       "file": "foods_swedish",
@@ -31,7 +34,8 @@
       "description": "2 575 Swedish foods from Livsmedelsverket (SLV)",
       "bundled": false,
       "license": "CC BY 4.0",
-      "size_bytes": 175419
+      "size_bytes": 175419,
+      "sha256": "e1420ad73bbe071543e3cad5836a48dd63da126294459444a560ebae77e3008f"
     }
   ]
 }
